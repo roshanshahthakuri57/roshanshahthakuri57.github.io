@@ -1,0 +1,67 @@
+# Optional self-hosted stack. GitHub Pages serves the static site on its own and does not use this file.
+#
+# OWASP Docker Security D03 (network segmentation and firewalling):
+#
+#   internet --> [proxy] --- internal (no egress) --- [web]
+#                  |
+#                 dmz
+#
+#   dmz      : only `proxy` joins it. It is the only network with a route to the outside
+#              and the only place a port is published.
+#   internal : `internal: true`. proxy <-> web only. No route to the internet.
+#   web      : holds the site files, publishes no port, never joins dmz.
+#
+# Tenants: the project `name` prefixes every network (portfolio_dmz, portfolio_internal).
+# A second site on the same host must use a different name (COMPOSE_PROJECT_NAME or `-p`),
+# so it gets its own networks and never shares these.
+name: ${COMPOSE_PROJECT_NAME:-portfolio}
+
+services:
+  proxy:
+    image: nginxinc/nginx-unprivileged:stable-alpine
+    restart: unless-stopped
+    ports:
+      - "${BIND:-127.0.0.1}:${PORT:-8080}:8080"
+    networks: [dmz, internal]
+    volumes:
+      - ./deploy/nginx/proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      web:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks: [internal]
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    # No `ports:` -- reachable only from the proxy, over the internal network.
+
+networks:
+  dmz:
+    driver: bridge
+  internal:
+    driver: bridge
+    internal: true
