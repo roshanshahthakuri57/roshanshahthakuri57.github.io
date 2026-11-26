@@ -4,7 +4,7 @@
   "use strict";
 
   var GITHUB = "https://github.com/roshanshahthakuri57";
-  var EMAIL = "roshanshahthakuri57@gmail.com";
+  var EMAIL = "kxah02@gmail.com";
 
   var DATA = {
     projects: [
